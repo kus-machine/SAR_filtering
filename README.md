@@ -20,9 +20,12 @@ jupyter notebook sample_interactive.ipynb
 jupyter lab sample_interactive.ipynb
 ```
 
-**Screenshot**
+**VST example:**
+![image](assets/VST_example_clear.png)
 
-![image](assets/VST_example.png)
+**VST example denoising:**
+![image](assets/VST_example_filtered.png)
+
 
 **Transforms**
 
