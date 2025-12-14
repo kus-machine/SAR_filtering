@@ -22,7 +22,7 @@ jupyter lab sample_interactive.ipynb
 
 **Screenshot**
 
-![image](assets\VST_example.png)
+![image](assets/VST_example.png)
 
 **Transforms**
 
