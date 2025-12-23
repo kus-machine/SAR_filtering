@@ -1,46 +1,37 @@
 import numpy as np
-from scipy.signal import convolve2d
+from skimage.metrics import peak_signal_noise_ratio as psnr
+from skimage.metrics import structural_similarity as ssim
 
 class NoiseEstimator:
-    """Клас для оцінки параметрів шуму."""
+    # ... (Keep existing methods: calculate_exact_sigma, estimate_blind_sigma) ...
     
     @staticmethod
     def calculate_exact_sigma(img_log_noised: np.ndarray, img_log_original: np.ndarray) -> float:
-        """
-        Точний розрахунок STD шуму за наявності еталону.
-        Noise = Log(Noised) - Log(Original)
-        """
-        # Різниця дає чистий шум + невеликий зсув (bias)
         noise_map = img_log_noised - img_log_original
-        
-        # Нас цікавить розкид (std), а не середнє значення
         return np.std(noise_map)
 
     @staticmethod
     def estimate_blind_sigma(img_log: np.ndarray) -> float:
-        """
-        Оцінка STD шуму без еталону (метод MAD).
-        Використовується при обробці реальних супутникових знімків.
-        """
-        # 1. Виділяємо високочастотні деталі (шум + краї)
-        # Використовуємо простий лапласіан-подібний оператор
-        kernel = np.array([[0, -1, 0], 
-                           [-1, 4, -1], 
-                           [0, -1, 0]])
-        
+        from scipy.signal import convolve2d
+        kernel = np.array([[0, -1, 0], [-1, 4, -1], [0, -1, 0]])
         high_freq = convolve2d(img_log, kernel, mode='same', boundary='symm')
-        
-        # 2. Розрахунок MAD (Median Absolute Deviation)
-        # Медіана стійка до сильних перепадів (країв об'єктів), 
-        # тому вона оцінює саме шум, ігноруючи контури.
         mad = np.median(np.abs(high_freq - np.median(high_freq)))
-        
-        # 3. Конвертація MAD в Sigma для нормального розподілу
-        # Коефіцієнт 1.4826 - стандартна константа для Gaussian distribution
-        # Додатковий дільник коригує вплив ядра згортки
-        sigma_est = (1.4826 * mad) / np.sqrt(20.0) # Емпіричний дільник для цього ядра
-        
-        # Для простоти часто використовують спрощений варіант Donoho (Wavelet HH band),
-        # але для spatial domain цей метод теж непоганий.
-        
-        return sigma_est * 4.5 # Емпіричне калібрування під наш VST
+        sigma_est = (1.4826 * mad) / np.sqrt(20.0)
+        return sigma_est * 4.5
+
+class QualityMetrics:
+    """New class for full-reference metrics."""
+    
+    @staticmethod
+    def compute_psnr(ground_truth: np.ndarray, distorted: np.ndarray, data_range=None) -> float:
+        print(ground_truth.shape, distorted.shape)
+        if data_range is None:
+            data_range = ground_truth.max() - ground_truth.min()
+        return psnr(ground_truth, distorted, data_range=data_range)
+
+    @staticmethod
+    def compute_ssim(ground_truth: np.ndarray, distorted: np.ndarray, data_range=None) -> float:
+        if data_range is None:
+            data_range = ground_truth.max() - ground_truth.min()
+        # ssim requires specifying data_range for float data
+        return ssim(ground_truth, distorted, data_range=data_range)
