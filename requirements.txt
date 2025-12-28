@@ -3,6 +3,10 @@ numpy>=1.21
 matplotlib>=3.4
 scipy>=1.8
 ipython>=8.0
-ipywidgets>=8.0
+ipywidgets
 notebook>=6.5
 tifffile
+# psnr-hvsm works only with x86, TODO: make it work at ARM (mac)
+psnr-hvsm
+imageio
+scikit-image
