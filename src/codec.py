@@ -2,6 +2,7 @@ import os
 import subprocess
 import numpy as np
 import imageio.v3 as iio
+import shutil
 
 class BPGCodec:
     def __init__(self, bpg_folder_path: str, temp_dir='temp'):
@@ -12,96 +13,98 @@ class BPGCodec:
         if not os.path.exists(temp_dir):
             os.makedirs(temp_dir)
             
-        # Check executables (Optional warning/error logic can go here)
         if not os.path.exists(self.bpg_enc):
             print(f"Warning: Encoder not found at {self.bpg_enc}")
 
-    def compress_decompress(self, image_log: np.ndarray, q: int):
-        """
-        Runs the full cycle: 
-        Float Log Image -> 8bit PNG -> BPG Enc -> BPG Dec -> 8bit PNG -> Float Log Image
-        """
-        original_shape = image_log.shape
-        
-        # 1. Normalize Float to 8-bit [0, 255]
-        d_min, d_max = image_log.min(), image_log.max()
-        
+    def _normalize_and_save_png(self, image: np.ndarray, png_path: str):
+        """Helper: Converts float image to 8-bit PNG."""
+        d_min, d_max = image.min(), image.max()
         if d_max == d_min:
-            norm_img = np.zeros_like(image_log, dtype=np.uint8)
+            norm_img = np.zeros_like(image, dtype=np.uint8)
         else:
-            norm_img = ((image_log - d_min) / (d_max - d_min) * 255.0).astype(np.uint8)
-            
-        # 2. Save Input PNG
-        t_input_png = os.path.join(self.temp_dir, 'input.png')
-        t_output_bpg = os.path.join(self.temp_dir, 'output.bpg')
-        t_decoded_png = os.path.join(self.temp_dir, 'decoded.png')
+            norm_img = ((image - d_min) / (d_max - d_min) * 255.0).astype(np.uint8)
         
-        # Clean previous runs
-        self._remove_safe(t_output_bpg)
-        self._remove_safe(t_decoded_png)
+        iio.imwrite(png_path, norm_img)
+        return d_min, d_max
+
+    def save_compressed_file(self, image: np.ndarray, q: int, output_path: str):
+        """
+        Saves the image as a BPG file to the specified output_path.
+        Args:
+            image: Float image (Linear or Log domain).
+            q: Quantizer value.
+            output_path: Where to save the result (e.g., 'results/best.bpg').
+        """
+        # Ensure output directory exists
+        os.makedirs(os.path.dirname(output_path), exist_ok=True)
         
-        iio.imwrite(t_input_png, norm_img)
+        t_input = os.path.join(self.temp_dir, 'temp_save_input.png')
         
-        # 3. BPG Encode
-        # -b 8: force 8-bit depth
-        # -c ycbcr / -c rgb: specific color space can be forced, but auto usually works
-        cmd_enc = [self.bpg_enc, '-q', str(q), '-b', '8', '-o', t_output_bpg, t_input_png]
+        # 1. Convert to 8-bit PNG
+        self._normalize_and_save_png(image, t_input)
         
-        # Suppress console window on Windows (optional)
+        # 2. Run Encoder
+        # Direct output to final path
+        cmd_enc = [self.bpg_enc, '-q', str(q), '-b', '8', '-o', output_path, t_input]
+        
         startupinfo = None
         if os.name == 'nt':
             startupinfo = subprocess.STARTUPINFO()
             startupinfo.dwFlags |= subprocess.STARTF_USESHOWWINDOW
 
-        res_enc = subprocess.run(cmd_enc, capture_output=True, startupinfo=startupinfo)
+        res = subprocess.run(cmd_enc, capture_output=True, startupinfo=startupinfo)
         
-        if res_enc.returncode != 0:
-            raise RuntimeError(f"BPG Encode Failed: {res_enc.stderr.decode(errors='ignore')}")
+        if res.returncode != 0:
+            raise RuntimeError(f"BPG Save Error: {res.stderr.decode(errors='ignore')}")
             
-        if not os.path.exists(t_output_bpg):
-             raise RuntimeError("BPG Encoder did not produce an output file.")
+        # Clean temp png
+        if os.path.exists(t_input): os.remove(t_input)
+        
+        return os.path.getsize(output_path)
 
-        file_size = os.path.getsize(t_output_bpg)
+    def compress_decompress(self, image_log: np.ndarray, q: int):
+        """Cycle: Float -> PNG -> BPG -> PNG -> Float"""
+        t_in = os.path.join(self.temp_dir, 'input.png')
+        t_bpg = os.path.join(self.temp_dir, 'output.bpg')
+        t_out = os.path.join(self.temp_dir, 'decoded.png')
         
-        # 4. BPG Decode
-        cmd_dec = [self.bpg_dec, '-o', t_decoded_png, t_output_bpg]
-        res_dec = subprocess.run(cmd_dec, capture_output=True, startupinfo=startupinfo)
+        self._remove_safe(t_bpg)
+        self._remove_safe(t_out)
         
-        if res_dec.returncode != 0:
-            raise RuntimeError(f"BPG Decode Failed: {res_dec.stderr.decode(errors='ignore')}")
+        # 1. Normalize
+        d_min, d_max = self._normalize_and_save_png(image_log, t_in)
+        
+        # 2. Encode
+        cmd_enc = [self.bpg_enc, '-q', str(q), '-b', '8', '-o', t_bpg, t_in]
+        
+        startupinfo = None
+        if os.name == 'nt':
+            startupinfo = subprocess.STARTUPINFO()
+            startupinfo.dwFlags |= subprocess.STARTF_USESHOWWINDOW
             
-        # 5. Read back and Fix Shapes
-        decoded_uint8 = iio.imread(t_decoded_png)
+        subprocess.run(cmd_enc, capture_output=True, startupinfo=startupinfo)
         
-        # --- SHAPE FIX LOGIC ---
-        # Випадок А: Оригінал 2D (H, W), а декодер повернув 3D (H, W, 3) (RGB)
-        if len(original_shape) == 2 and len(decoded_uint8.shape) == 3:
-            # Беремо тільки перший канал (вони однакові для Grayscale)
-            decoded_uint8 = decoded_uint8[:, :, 0]
+        if not os.path.exists(t_bpg): raise RuntimeError("BPG Enc failed")
+        f_size = os.path.getsize(t_bpg)
+        
+        # 3. Decode
+        cmd_dec = [self.bpg_dec, '-o', t_out, t_bpg]
+        subprocess.run(cmd_dec, capture_output=True, startupinfo=startupinfo)
+        
+        # 4. Restore
+        dec_uint8 = iio.imread(t_out)
+        if len(image_log.shape) == 2 and dec_uint8.ndim == 3: dec_uint8 = dec_uint8[:,:,0]
+        if dec_uint8.shape != image_log.shape: dec_uint8 = dec_uint8[:image_log.shape[0], :image_log.shape[1]]
             
-        # Випадок Б: Розміри не співпадають (наприклад, педдінг)
-        if decoded_uint8.shape != original_shape:
-            # Обрізаємо до оригінального розміру
-            h, w = original_shape
-            decoded_uint8 = decoded_uint8[:h, :w]
-        # -----------------------
-
-        # Map back to float range
-        decoded_float = (decoded_uint8.astype(float) / 255.0) * (d_max - d_min) + d_min
+        dec_float = (dec_uint8.astype(float) / 255.0) * (d_max - d_min) + d_min
         
-        # Calculate bits per pixel
-        h, w = original_shape
-        bpp = (file_size * 8) / (h * w)
+        h, w = image_log.shape
+        bpp = (f_size * 8) / (h * w)
         
-        return decoded_float, file_size, bpp
+        return dec_float, f_size, bpp
 
     def _remove_safe(self, path):
         try:
             if os.path.exists(path): os.remove(path)
         except: pass
 
-    def cleanup(self):
-        try:
-            for f in ['input.png', 'output.bpg', 'decoded.png']:
-                self._remove_safe(os.path.join(self.temp_dir, f))
-        except: pass
