@@ -8,6 +8,7 @@ try:
     from psnr_hvsm import psnr_hvs_hvsm
     HAS_HVSM = True
 except ImportError:
+    print("WARNING: 'psnr-hvsm' library not found. HVS-M metrics will be disabled.")
     HAS_HVSM = False
 
 class QualityMetrics:
@@ -34,6 +35,7 @@ class QualityMetrics:
         Returns: (psnr_hvs, psnr_hvsm)
         """
         if not HAS_HVSM:
+            print("WARNING: Attempted to compute HVS metrics but library is missing.")
             return 0.0, 0.0
             
         if data_range is None: 
@@ -53,17 +55,19 @@ class QualityMetrics:
         
         return psnr_hvs_hvsm(img1, img2)
 
-    @staticmethod
-    @MetricRegistry.register("psnr_hvs")
-    def compute_psnr_hvs(gt: np.ndarray, dist: np.ndarray, data_range=None) -> float:
-        hvs, _ = QualityMetrics.compute_hvs_metrics(gt, dist, data_range)
-        return hvs
+    # Conditionally register metrics
+    if HAS_HVSM:
+        @staticmethod
+        @MetricRegistry.register("psnr_hvs")
+        def compute_psnr_hvs(gt: np.ndarray, dist: np.ndarray, data_range=None) -> float:
+            hvs, _ = QualityMetrics.compute_hvs_metrics(gt, dist, data_range)
+            return hvs
 
-    @staticmethod
-    @MetricRegistry.register("psnr_hvsm")
-    def compute_psnr_hvsm(gt: np.ndarray, dist: np.ndarray, data_range=None) -> float:
-        _, hvsm = QualityMetrics.compute_hvs_metrics(gt, dist, data_range)
-        return hvsm
+        @staticmethod
+        @MetricRegistry.register("psnr_hvsm")
+        def compute_psnr_hvsm(gt: np.ndarray, dist: np.ndarray, data_range=None) -> float:
+            _, hvsm = QualityMetrics.compute_hvs_metrics(gt, dist, data_range)
+            return hvsm
 
 class NoiseEstimator:
     @staticmethod

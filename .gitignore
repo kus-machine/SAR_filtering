@@ -1,4 +1,5 @@
 .venv
-src/__pycache__
+__pycache__
 bpg-0.9.8-win64
 temp
+results
