@@ -9,8 +9,13 @@ from .interfaces import BaseCodec, EncodeResult
 class BPGCodec(BaseCodec):
     def __init__(self, bpg_folder_path: str, temp_dir: str = 'temp'):
         self.bpg_folder = Path(bpg_folder_path)
-        self.bpg_enc = self.bpg_folder / 'bpgenc.exe'
-        self.bpg_dec = self.bpg_folder / 'bpgdec.exe'
+        
+        is_windows = os.name == 'nt'
+        enc_name = 'bpgenc.exe' if is_windows else 'bpgenc'
+        dec_name = 'bpgdec.exe' if is_windows else 'bpgdec'
+        
+        self.bpg_enc = self.bpg_folder / enc_name
+        self.bpg_dec = self.bpg_folder / dec_name
         self.temp_dir = Path(temp_dir)
         
         self.temp_dir.mkdir(exist_ok=True)

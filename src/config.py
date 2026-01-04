@@ -1,5 +1,6 @@
 from dataclasses import dataclass, field
 from typing import List, Optional, Tuple, Dict, Any
+import platform
 
 @dataclass
 class VSTConfig:
@@ -47,7 +48,7 @@ class ExportConfig:
 @dataclass
 class AppConfig:
     """Root configuration for the application."""
-    bpg_path: str = 'bpg-0.9.8-win64'
+    bpg_path: str = field(default_factory=lambda: 'bpg-0.9.8-win64' if platform.system() == 'Windows' else 'libbpg')
     vst: VSTConfig = field(default_factory=VSTConfig)
     data: DataConfig = field(default_factory=DataConfig)
     experiment: ExperimentConfig = field(default_factory=ExperimentConfig)
