@@ -1,108 +1,69 @@
 
+import sys
+import os
 import numpy as np
-from scipy import fftpack
 
-def dct_8x8(img):
-    """
-    Performs 8x8 block-wise DCT.
-    """
-    h, w = img.shape
-    # Reshape to (h//8, 8, w//8, 8) -> (blocks_h, blocks_w, 8, 8)
-    blocks = img.reshape(h//8, 8, w//8, 8).transpose(0, 2, 1, 3)
-    
-    # Run DCT on last two axes
-    dct_blocks = fftpack.dctn(blocks, axes=(2, 3), type=2, norm='ortho')
-    return dct_blocks
+# Add repo root check removed as we now use relative imports
 
-def get_csf_matrix():
-    """
-    Returns standard 8x8 CSF weighting matrix for HVS metrics.
-    Based on standard approximations (e.g. Nill or Ahumada).
-    """
-    # This standard table resembles the inverse of the JPEG quantization matrix 
-    # tailored for visual sensitivity.
-    # Values approx from Ponomarenko et al. works.
-    csf = np.array([
-        [1.62, 2.72, 2.37, 1.48, 0.99, 0.70, 0.52, 0.40],
-        [2.65, 3.42, 2.68, 1.57, 1.05, 0.73, 0.54, 0.41],
-        [2.31, 2.76, 2.08, 1.25, 0.84, 0.59, 0.44, 0.33],
-        [1.48, 1.63, 1.25, 0.78, 0.53, 0.38, 0.29, 0.22],
-        [0.98, 1.05, 0.81, 0.52, 0.36, 0.26, 0.20, 0.15],
-        [0.69, 0.72, 0.56, 0.37, 0.26, 0.19, 0.14, 0.11],
-        [0.51, 0.54, 0.42, 0.28, 0.20, 0.14, 0.11, 0.08],
-        [0.39, 0.41, 0.32, 0.21, 0.15, 0.11, 0.08, 0.06]
-    ])
-    return csf
+try:
+    # Import the pure python backend from the VENDORED local library
+    from .psnr_hvsm_lib.psnr_hvsm import psnr_hvs_hvsm as _lib_psnr_hvsm
+except ImportError:
+    print("WARNING: Could not import vendored psnr_hvsm_lib. Using fallback/stub.")
+    _lib_psnr_hvsm = None
 
-def psnr_hvs_hvsm(img1, img2):
+def psnr_hvs_hvsm(img1: np.ndarray, img2: np.ndarray) -> tuple:
     """
-    Computes PSNR-HVS and PSNR-HVS-M (approx).
+    Wrapper for the local PSNR-HVS-M library integration.
+    Handles normalization to [0, 1] and cropping to 8x8 multiples.
     
     Args:
-        img1: Reference image (grayscale, [0, 255] or [0, 1] -- will assume it matches img2 domain)
-        img2: Distorted image
+        img1: Reference image (any range, will be normalized)
+        img2: Distorted image (any range, will be normalized)
         
     Returns:
         (psnr_hvs, psnr_hvsm)
     """
+    # 1. Determine Range and Normalize
+    # The library hardcodes peak=1.0 in get_psnr().
+    # So we MUST normalize to [0, 1].
+    
     img1 = img1.astype(np.float64)
     img2 = img2.astype(np.float64)
     
-    # Dimensions
+    # Heuristic for range: if max > 1.1, assume [0, 255]
+    if img1.max() > 1.1:
+        img1 /= 255.0
+        img2 /= 255.0
+        
+    # 2. Crop to 8x8
     h, w = img1.shape
     h = (h // 8) * 8
     w = (w // 8) * 8
     img1 = img1[:h, :w]
     img2 = img2[:h, :w]
     
-    # 1. Block DCT
-    coefs1 = dct_8x8(img1)
-    coefs2 = dct_8x8(img2)
-    
-    # 2. CSF Weighting
-    csf = get_csf_matrix()
-    
-    # Expand CSF to broadcast: (1, 1, 8, 8)
-    csf_grid = csf.reshape(1, 1, 8, 8)
-    
-    # --- PSNR-HVS Calculation ---
-    # Error in DCT domain weighted by CSF
-    diff = (coefs1 - coefs2) * csf_grid
-    mse_hvs = np.mean(diff ** 2)
-    
-    if mse_hvs == 0:
-        psnr_hvs = 100.0
-    else:
-        # Dynamic range assumed 255 usually for standard metrics
-        # If inputs are 0-1, this should be 1. But standard is usually 255.
-        # We'll check max value or assume 255 if > 1.
-        peak = 255.0
-        if img1.max() <= 1.01: peak = 1.0
+    # 3. Call Library
+    if _lib_psnr_hvsm is None:
+        return 0.0, 0.0
+
+    try:
+        # Function signature: (images_a, images_b, batch=False)
+        # It handles batching. We pass single images (H, W).
+        # Internal to_blocks expects (..., H, W).
+        # hvs_mse_tiles returns tiles.
+        # psnr_hvs_hvsm returns scalar means if not batch.
         
-        psnr_hvs = 10 * np.log10(peak**2 / mse_hvs)
+        res_hvs, res_hvsm = _lib_psnr_hvsm(img1, img2, batch=False)
         
-    # --- PSNR-HVS-M Calculation (Masking) ---
-    # Masking effect: High energy in a frequency band masks errors in that band.
-    # Simple model: Effective_Error = Error / max(1, w * |Coeff|)
-    # Ponomarenko's model is more complex, involving regional contrast.
-    # For this port, we will use a simplified coefficient masking.
-    
-    # Masking threshold based on reference coefficients
-    # mask = 1 + k * |coefs1| * csf
-    # This is a common form (Watson).
-    # k usually around 0.1 ~ 0.3 for visual masking.
-    k_mask = 0.2
-    
-    masking_factor = 1.0 + k_mask * (np.abs(coefs1) * csf_grid)
-    
-    # Apply masking to the difference
-    diff_masked = diff / masking_factor
-    
-    mse_hvsm = np.mean(diff_masked ** 2)
-    
-    if mse_hvsm == 0:
-        psnr_hvsm = 100.0
-    else:
-        psnr_hvsm = 10 * np.log10(peak**2 / mse_hvsm)
+        # Ensure scalars
+        if isinstance(res_hvs, np.ndarray) and res_hvs.size == 1:
+            res_hvs = float(res_hvs)
+        if isinstance(res_hvsm, np.ndarray) and res_hvsm.size == 1:
+            res_hvsm = float(res_hvsm)
+            
+        return res_hvs, res_hvsm
         
-    return psnr_hvs, psnr_hvsm
+    except Exception as e:
+        print(f"Error calling internal PSNR-HVS-M library: {e}")
+        return 0.0, 0.0
