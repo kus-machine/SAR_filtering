@@ -69,6 +69,44 @@ class QualityMetrics:
             _, hvsm = QualityMetrics.compute_hvs_metrics(gt, dist, data_range)
             return hvsm
 
+    @staticmethod
+    def compute_relative_error_map(gt: np.ndarray, dist: np.ndarray) -> np.ndarray:
+        """
+        Calculates a high-contrast relative error map.
+        
+        Formula:
+            Delta(i,j) = 128 + 128 * ( (dist(i,j) - gt(i,j)) / gt(i,j) )
+        
+        Interpretation:
+            - Value = 128: Zero Error (Gray/White).
+            - Value > 128: Positive Error (dist > gt). 
+              - 192 (+64)  -> +50% Error
+              - 255 (+127) -> +100% Error or more (Clamped)
+            - Value < 128: Negative Error (dist < gt).
+              - 64  (-64)  -> -50% Error
+              - 0   (-128) -> -100% Error (Clamped)
+              
+        Returns:
+            np.ndarray: Error map clamped to [0, 255] as uint8.
+        """
+        # Avoid division by zero
+        epsilon = 1e-6
+        gt_safe = gt.astype(np.float64)
+        gt_safe[gt_safe == 0] = epsilon
+        
+        dist_float = dist.astype(np.float64)
+        
+        # Calculate Fractional Relative Error: (dist - gt) / gt
+        # Range: [-1.0, +inf) usually
+        rel_error = (dist_float - gt_safe) / gt_safe
+        
+        # Scale and Shift
+        # 128 is the neutral center. 
+        # +/- 128 covers the range from -100% to +100% error.
+        delta = 128 + (128 * rel_error)
+        
+        return np.clip(delta, 0, 255).astype(np.uint8)
+
 class NoiseEstimator:
     @staticmethod
     def calculate_exact_sigma(img_log_noised: np.ndarray, img_log_original: np.ndarray) -> float:

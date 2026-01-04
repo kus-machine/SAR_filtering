@@ -66,3 +66,18 @@ $$
 *   $b$ — logarithm base.
 *   $I$ — input intensity.
 *   $y$ — transformed value.
+    
+## Relative Error Map
+
+The analysis framework now includes a **Relative Error Map** to visualize compression artifacts in the image domain relative to the signal strength.
+
+**Formula:**
+$$
+\Delta(i,j) = 128 + 128 \times \left( \frac{I_{\text{comp}}(i,j) - I_{\text{true}}(i,j)}{I_{\text{true}}(i,j)} \right)
+$$
+
+**Interpretation:**
+*   This map is centered at **128 (Neutral Gray)**, which represents 0% relative error.
+*   **Blue (Values < 128):** The compressed pixel is **darker** than the original (loss of energy/information).
+*   **Red (Values > 128):** The compressed pixel is **brighter** than the original (ringing artifacts, noise amplification).
+*   The range covers $\pm 100\%$ relative error clamped to $[0, 255]$.

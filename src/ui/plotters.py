@@ -61,3 +61,48 @@ class MatplotlibPlotter(PlotterInterface):
         
         plt.tight_layout()
         plt.show()
+
+    def plot_error_maps(self, result: Any):
+        """
+        Plots relative error maps for OOP images.
+        """
+        from ..metrics import QualityMetrics
+        import numpy as np
+        
+        # Check if we have OOP images
+        img_lin = result.oop_image_lin
+        img_vst = result.oop_image_vst
+        ref = result.ref_image
+        
+        if img_lin is None or img_vst is None or ref is None:
+            print("OOP Images not available for error map plotting.")
+            return
+
+        # Compute Maps
+        map_lin = QualityMetrics.compute_relative_error_map(ref, img_lin)
+        map_vst = QualityMetrics.compute_relative_error_map(ref, img_vst)
+        
+        fig, axes = plt.subplots(1, 2, figsize=(14, 6))
+        
+        # Use 'bwr' (Blue-White-Red) diverging colormap.
+        # 0 (Blue) -> -100% Error
+        # 128 (White) -> 0% Error
+        # 255 (Red) -> +100% Error
+        cmap_name = 'bwr' 
+        
+        # Plot Linear
+        im1 = axes[0].imshow(map_lin, cmap=cmap_name, vmin=0, vmax=255)
+        axes[0].set_title(f"Relative Error Map (Standard)\nQ={result.oop_points['linear'].get('q', '?')}\n(Blue: Loss, White: Accurate, Red: Excess)")
+        axes[0].axis('off')
+        cb1 = fig.colorbar(im1, ax=axes[0], fraction=0.046, pad=0.04)
+        cb1.set_label('Relative Error Bias (128=0%)')
+        
+        # Plot VST
+        im2 = axes[1].imshow(map_vst, cmap=cmap_name, vmin=0, vmax=255)
+        axes[1].set_title(f"Relative Error Map (VST)\nQ={result.oop_points['vst'].get('q', '?')}\n(Blue: Loss, White: Accurate, Red: Excess)")
+        axes[1].axis('off')
+        cb2 = fig.colorbar(im2, ax=axes[1], fraction=0.046, pad=0.04)
+        cb2.set_label('Relative Error Bias (128=0%)')
+        
+        plt.tight_layout()
+        plt.show()

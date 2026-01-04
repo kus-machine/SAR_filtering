@@ -20,6 +20,8 @@ class AnalysisResult:
     source_image: np.ndarray # Noised
     ref_image: np.ndarray    # Original
     file_ext: str            # Original extension or .png for gen
+    oop_image_lin: Optional[np.ndarray] = None
+    oop_image_vst: Optional[np.ndarray] = None
 
 class AnalysisController:
     def __init__(self, bpg_path: str = 'bpg-0.9.8-win64'):
@@ -86,28 +88,48 @@ class AnalysisController:
         def find_oop(res):
             # OOP defined as max PSNR for now (or maybe HVS-M in future)
             # User logic was max PSNR
+            if not res['psnr']: return {}, -1
             idx = np.argmax(res['psnr'])
-            return {k: res[k][idx] for k in res.keys()}, idx
+            return {k: res[k][idx] for k in res.keys()}, int(res['q'][idx])
             
-        oop_vst, _ = find_oop(res_vst)
-        oop_lin, _ = find_oop(res_lin)
+        oop_vst, q_vst = find_oop(res_vst)
+        oop_lin, q_lin = find_oop(res_lin)
         
-        # 3. DataFrame
+        # 3. Re-generate OOP images
+        def get_compressed_image(img, q, use_vst_loc):
+            if q == -1: return None
+            if use_vst_loc:
+                vst = VarianceStabilizer(vst_cfg)
+                to_compress = vst.forward(img)
+            else:
+                to_compress = img
+                
+            res = self.codec.compress_decompress(to_compress, q=q)
+            decoded = res.decoded_image
+            
+            if use_vst_loc:
+                return vst.inverse(decoded)
+            return decoded
+
+        img_oop_vst = get_compressed_image(img_noised, q_vst, True)
+        img_oop_lin = get_compressed_image(img_noised, q_lin, False)
+        
+        # 4. DataFrame
         # Construct summary dataframe for display
         df = pd.DataFrame([
             {
                 'Method': 'Standard', 
-                'Q(OOP)': oop_lin['q'], 
-                'PSNR': f"{oop_lin['psnr']:.2f}", 
+                'Q(OOP)': oop_lin.get('q', 0), 
+                'PSNR': f"{oop_lin.get('psnr', 0):.2f}", 
                 'HVS-M': f"{oop_lin.get('psnr_hvsm', 0):.2f}", 
-                'CR': f"{oop_lin['cr']:.1f}"
+                'CR': f"{oop_lin.get('cr', 0):.1f}"
             },
             {
                 'Method': 'Proposed (VST)', 
-                'Q(OOP)': oop_vst['q'], 
-                'PSNR': f"{oop_vst['psnr']:.2f}", 
+                'Q(OOP)': oop_vst.get('q', 0), 
+                'PSNR': f"{oop_vst.get('psnr', 0):.2f}", 
                 'HVS-M': f"{oop_vst.get('psnr_hvsm', 0):.2f}", 
-                'CR': f"{oop_vst['cr']:.1f}"
+                'CR': f"{oop_vst.get('cr', 0):.1f}"
             }
         ])
         
@@ -117,7 +139,9 @@ class AnalysisController:
             oop_points={'linear': oop_lin, 'vst': oop_vst},
             source_image=img_noised,
             ref_image=img_ref,
-            file_ext=file_ext
+            file_ext=file_ext,
+            oop_image_lin=img_oop_lin,
+            oop_image_vst=img_oop_vst
         )
         self.last_result = result
         return result

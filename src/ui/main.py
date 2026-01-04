@@ -57,6 +57,7 @@ class AnalysisUI:
                 
                 # Plot
                 self.plotter.plot_curves(res.curves, res.oop_points)
+                self.plotter.plot_error_maps(res)
                 
                 # Auto-Save logic
                 if cfg['save_oop']:
