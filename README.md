@@ -115,9 +115,9 @@ The analysis framework now includes a **Relative Error Map** to visualize compre
 ![Error Maps](assets/NOISED_2_ErrorMaps.png)
 
 **Formula:**
-$$
+```math
 \Delta(i,j) = 128 + 128 \times \left( \frac{I_{\mathrm{comp}}(i,j) - I_{\mathrm{true}}(i,j)}{I_{\mathrm{true}}(i,j)} \right)
-$$
+```
 
 **Interpretation:**
 *   This map is centered at **128 (Neutral Gray)**, which represents 0% relative error.
