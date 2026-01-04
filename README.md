@@ -66,10 +66,53 @@ $$
 *   $b$ — logarithm base.
 *   $I$ — input intensity.
 *   $y$ — transformed value.
-    
+
+## Experiment Results (Metrics)
+
+The framework evaluates the compression efficiency using both standard metrics (PSNR, MSE) and Human Visual System (HVS) based metrics (PSNR-HVS-M).
+
+### 1. PSNR vs. Q (Quantization)
+![PSNR Plot](assets/NOISED_2_Plot_PSNR.png)
+*   **Purpose:** Shows the traditional Rate-Distortion performance.
+*   **Observation:** The VST approach (Red) typically maintains higher PSNR at various quality levels compared to Linear encoding (Blue), especially in dark regions where multiplicative noise is problematic. The star indicates the Optimal Operation Point (OOP).
+
+### 2. HVS-M vs. Q
+![HVSM Plot](assets/NOISED_2_Plot_HVSM.png)
+*   **Purpose:** Evaluates visual quality by accounting for Contrast Sensitivity Function (CSF) and masking effects.
+*   **Observation:** HVS-M often aligns better with perceived quality. The VST method generally preserves visual details better, resulting in a higher HVS-M score.
+
+### 3. Codec MSE
+![MSE Plot](assets/NOISED_2_Plot_MSE.png)
+*   **Purpose:** Measures the internal Mean Squared Error of the codec in the domain it operates in.
+*   **Observation:** This metric confirms the encoder's behavior in the transformed space vs the linear space.
+
+### 4. Optimal Operation Point (OOP)
+The framework identifies the OOP, which is the Quantization parameter ($Q$) that maximizes the chosen metric (e.g., PSNR-HVS-M).
+*   **OOP Image (Linear):** Reconstruction using standard compression.
+*   **OOP Image (VST):** Reconstruction using VST + Compression + Inverse VST.
+
+### 5. Metrics Summary Table
+A summary of the optimal operation points found for both methods from `assets/metrics.csv`:
+
+| Method | Q(OOP) | PSNR_HVSM(OOP) | PSNR | HVS-M | MSE | Filesize (KB) | CR |
+| :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- |
+| **Standard space** | 35 | 39.30 | 42.99 | 39.30 | 6.16 | 0.9 | 178.6 |
+| **VST space** | 22 | 34.02 | 39.98 | 34.02 | 12.35 | 1.4 | 112.8 |
+
+**Columns Explanation:**
+*   **Method:** The processing domain (Standard Linear or VST Logarithmic).
+*   **Q(OOP):** The Quantization Step giving the best result for the selected metric.
+*   **PSNR_HVSM(OOP):** The score of the target metric (if optimized for HVS-M) at OOP.
+*   **PSNR / HVS-M:** Signal-to-Noise Ratio metrics at the OOP.
+*   **MSE:** Mean Squared Error between the reconstructed OOP image and Original.
+*   **Filesize (KB):** Size of the compressed BPG bitstream.
+*   **CR:** Compression Ratio (Original Size / Compressed Size).
+
 ## Relative Error Map
 
 The analysis framework now includes a **Relative Error Map** to visualize compression artifacts in the image domain relative to the signal strength.
+
+![Error Maps](assets/NOISED_2_ErrorMaps.png)
 
 **Formula:**
 $$
