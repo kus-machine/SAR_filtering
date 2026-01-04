@@ -116,7 +116,7 @@ The analysis framework now includes a **Relative Error Map** to visualize compre
 
 **Formula:**
 $$
-\Delta(i,j) = 128 + 128 \times \left( \frac{I_{\text{comp}}(i,j) - I_{\text{true}}(i,j)}{I_{\text{true}}(i,j)} \right)
+\Delta(i,j) = 128 + 128 \times \left( \frac{I_{\mathrm{comp}}(i,j) - I_{\mathrm{true}}(i,j)}{I_{\mathrm{true}}(i,j)} \right)
 $$
 
 **Interpretation:**
