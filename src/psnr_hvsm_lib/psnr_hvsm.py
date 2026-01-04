@@ -41,10 +41,11 @@ def masking(tiles: np.ndarray, tiles_dct: np.ndarray) -> np.ndarray:
         return np.var(a, axis=(-1, -2), ddof=1) * a.shape[-1] * a.shape[-2]
 
     var = vari(tiles)
-    var = np.where(var != 0.0, (vari(tiles[..., :qh, :qw]) +
-                                vari(tiles[..., :qh, qw:]) +
-                                vari(tiles[..., qh:, :qw]) +
-                                vari(tiles[..., qh:, qw:])) / var, 0.0)
+    with np.errstate(divide='ignore', invalid='ignore'):
+        var = np.where(var != 0.0, (vari(tiles[..., :qh, :qw]) +
+                                    vari(tiles[..., :qh, qw:]) +
+                                    vari(tiles[..., qh:, :qw]) +
+                                    vari(tiles[..., qh:, qw:])) / var, 0.0)
 
     return np.sqrt(mask * var / (qh * qw) / (DCT_H * DCT_W))
 

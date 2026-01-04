@@ -57,20 +57,25 @@ class AnalysisUI:
                     vst_b=self.cfg.vst.b,
                     q_start=self.cfg.experiment.q_start,
                     q_end=self.cfg.experiment.q_end,
-                    q_step=self.cfg.experiment.q_step
+                    q_step=self.cfg.experiment.q_step,
+                    oop_metric=self.cfg.experiment.oop_metric
                 )
                 
                 # Display DataFrame
                 display(res.metrics_df)
                 
+                # Auto-Save Results if configured
+                if self.cfg.export.save_csv:
+                     self.on_save_csv(None)
+
                 # Plot (will auto-save if configured)
                 self.plotter.plot_curves(res.curves, res.oop_points)
                 self.plotter.plot_error_maps(res)
                 
                 # Auto-Save OOP Image logic
                 if self.cfg.export.save_oop_images:
-                    # TODO: Implement OOP image saving if needed beyond plot
-                    pass
+                    self.controller.save_oop_image(res, 'linear', self.cfg.export.results_dir)
+                    self.controller.save_oop_image(res, 'vst', self.cfg.export.results_dir)
         
         except Exception as e:
             with self.output:

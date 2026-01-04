@@ -39,7 +39,18 @@ class InputPanel:
         self.w_q_start = widgets.IntText(value=config.experiment.q_start, description='Q Start:', style=s, layout=widgets.Layout(width='150px'))
         self.w_q_end = widgets.IntText(value=config.experiment.q_end, description='Q End:', style=s, layout=widgets.Layout(width='150px'))
         self.w_q_step = widgets.IntText(value=config.experiment.q_step, description='Q Step:', style=s, layout=widgets.Layout(width='150px'))
-        self.container_exp = widgets.HBox([self.w_q_start, self.w_q_end, self.w_q_step])
+        
+        self.w_oop_metric = widgets.Dropdown(
+            options=[('PSNR', 'psnr'), ('PSNR-HVS-M', 'psnr_hvsm')],
+            value=config.experiment.oop_metric,
+            description='OOP Metric:',
+            style=s
+        )
+        
+        self.container_exp = widgets.VBox([
+            widgets.HBox([self.w_q_start, self.w_q_end, self.w_q_step]),
+            self.w_oop_metric
+        ])
 
         # --- Tab 4: Export ---
         self.w_save_plots = widgets.Checkbox(value=config.plotting.save_plots, description='Auto-Save Plots')
@@ -79,6 +90,7 @@ class InputPanel:
         self.cfg.experiment.q_start = self.w_q_start.value
         self.cfg.experiment.q_end = self.w_q_end.value
         self.cfg.experiment.q_step = self.w_q_step.value
+        self.cfg.experiment.oop_metric = self.w_oop_metric.value
         
         self.cfg.plotting.save_plots = self.w_save_plots.value
         self.cfg.export.save_oop_images = self.w_save_oop_img.value

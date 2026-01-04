@@ -23,6 +23,7 @@ class ExperimentConfig:
     q_end: int = 51
     q_step: int = 1
     metrics: List[str] = field(default_factory=lambda: ['psnr', 'psnr_hvsm', 'ssim', 'mse_codec'])
+    oop_metric: str = 'psnr' # 'psnr' or 'psnr_hvsm'
 
 @dataclass
 class PlottingConfig:

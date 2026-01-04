@@ -70,7 +70,8 @@ class AnalysisController:
                      path_noised: str,
                      path_original: str,
                      vst_a: float, vst_b: float,
-                     q_start: int, q_end: int, q_step: int) -> AnalysisResult:
+                     q_start: int, q_end: int, q_step: int,
+                     oop_metric: str = 'psnr') -> AnalysisResult:
         
         img_ref, img_noised, file_ext = self.get_data(source_type, noise_level, path_noised, path_original)
         
@@ -86,10 +87,14 @@ class AnalysisController:
         
         # 2. Find OOPs
         def find_oop(res):
-            # OOP defined as max PSNR for now (or maybe HVS-M in future)
-            # User logic was max PSNR
-            if not res['psnr']: return {}, -1
-            idx = np.argmax(res['psnr'])
+            metric_key = oop_metric
+            if metric_key not in res or not res[metric_key]: 
+                 # Fallback to PSNR if metric not found (e.g. psnr_hvsm missing)
+                 metric_key = 'psnr'
+            
+            if not res[metric_key]: return {}, -1
+            
+            idx = np.argmax(res[metric_key])
             return {k: res[k][idx] for k in res.keys()}, int(res['q'][idx])
             
         oop_vst, q_vst = find_oop(res_vst)
@@ -115,21 +120,37 @@ class AnalysisController:
         img_oop_lin = get_compressed_image(img_noised, q_lin, False)
         
         # 4. DataFrame
-        # Construct summary dataframe for display
+        def get_fmt(val, fmt=".2f"):
+            return f"{val:{fmt}}" if isinstance(val, (int, float)) else str(val)
+
+        # Helper to calc MSE for OOP if not directly available (but we can compute it manually or use metrics)
+        def get_oop_mse(img_oop, img_ref):
+             if img_oop is None or img_ref is None: return 0.0
+             return np.mean((img_oop - img_ref)**2)
+
+        mse_lin = get_oop_mse(img_oop_lin, img_ref)
+        mse_vst = get_oop_mse(img_oop_vst, img_ref)
+
         df = pd.DataFrame([
             {
                 'Method': 'Standard space', 
                 'Q(OOP)': oop_lin.get('q', 0), 
-                'PSNR': f"{oop_lin.get('psnr', 0):.2f}", 
-                'HVS-M': f"{oop_lin.get('psnr_hvsm', 0):.2f}", 
-                'CR': f"{oop_lin.get('cr', 0):.1f}"
+                f'{oop_metric.upper()}(OOP)': get_fmt(oop_lin.get(oop_metric, 0)),
+                'PSNR': get_fmt(oop_lin.get('psnr', 0)), 
+                'HVS-M': get_fmt(oop_lin.get('psnr_hvsm', 0)), 
+                'MSE': get_fmt(mse_lin, ".2f"),
+                'Filesize (KB)': get_fmt(oop_lin.get('file_size_kb', 0), ".1f"),
+                'CR': get_fmt(oop_lin.get('cr', 0), ".1f")
             },
             {
                 'Method': 'VST space', 
                 'Q(OOP)': oop_vst.get('q', 0), 
-                'PSNR': f"{oop_vst.get('psnr', 0):.2f}", 
-                'HVS-M': f"{oop_vst.get('psnr_hvsm', 0):.2f}", 
-                'CR': f"{oop_vst.get('cr', 0):.1f}"
+                f'{oop_metric.upper()}(OOP)': get_fmt(oop_vst.get(oop_metric, 0)),
+                'PSNR': get_fmt(oop_vst.get('psnr', 0)), 
+                'HVS-M': get_fmt(oop_vst.get('psnr_hvsm', 0)), 
+                'MSE': get_fmt(mse_vst, ".2f"),
+                'Filesize (KB)': get_fmt(oop_vst.get('file_size_kb', 0), ".1f"),
+                'CR': get_fmt(oop_vst.get('cr', 0), ".1f")
             }
         ])
         
@@ -153,22 +174,36 @@ class AnalysisController:
         """
         if method not in ['vst', 'linear']: return ""
         
-        oop = result.oop_points[method]
-        q = oop['q']
+        img = result.oop_image_vst if method == 'vst' else result.oop_image_lin
+        if img is None: return ""
         
-        # Re-run compression to get the image
-        # This is slightly inefficient (running again), but cleaner than storing all images in memory
-        vst_cfg = VSTConfig() # We need the actual config used! 
-        # TODO: Store config in Result? For now assume params from UI passed or standard.
-        # Actually, self.last_result doesn't store VST params used. 
-        # We should probably pass them or store them.
-        # Let's assume standard config or what was passed last? 
-        # Better: Re-instantiate based on what we know, or just do it in run_analysis.
-        pass 
-        # Optimization: Codec can save directly.
-        # But we need domain locic.
+        # Determine filename
+        # Base on input filename if available (not easily accessible here without plumbing, 
+        # but we can pass it or just use generic since user asked for 'save_oop_images option')
+        # Let's use a generic name pattern: "Image_OOP_{method}.png"
         
-        return "Not implemented fully yet, need VST Config passing"
+        os.makedirs(output_dir, exist_ok=True)
+        fname = f"Image_OOP_{method}.png"
+        path = os.path.join(output_dir, fname)
+        
+        try:
+            import imageio.v3 as iio
+            # Normalize to uint8 [0, 255]
+            d_min, d_max = img.min(), img.max()
+            if d_max > d_min:
+                norm = ((img - d_min) / (d_max - d_min) * 255.0).astype(np.uint8)
+            else:
+                norm = img.astype(np.uint8)
+                
+            iio.imwrite(path, norm)
+            print(f"Saved OOP image: {path}")
+            return path
+        except Exception as e:
+            print(f"Failed to save OOP image: {e}")
+            return ""
 
     def save_results_csv(self, result: AnalysisResult, path: str):
-        result.metrics_df.to_csv(path, index=False)
+        try:
+            result.metrics_df.to_csv(path, index=False)
+        except Exception as e:
+            print(f"Failed to save CSV: {e}")

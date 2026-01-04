@@ -13,12 +13,6 @@ class MatplotlibPlotter(PlotterInterface):
         if self.cfg.plotting.save_plots:
             os.makedirs(self.cfg.export.results_dir, exist_ok=True)
             
-            # Derive base name from input file
-            # Format: {OriginalName}_{Suffix}.png
-            # We need to access the input path from config or result.
-            # Best to pass it or extract from config.data.path_noised if available.
-            # However, if 'gen', we might use 'Generated'.
-            
             base_name = "Generated"
             if self.cfg.data.source_type == 'file':
                 # Extract basename without extension
@@ -45,51 +39,80 @@ class MatplotlibPlotter(PlotterInterface):
         markers = self.cfg.plotting.markers
         figsize = self.cfg.plotting.figsize
         
+        # We create a single figure for notebook display
         fig, axes = plt.subplots(1, 3, figsize=figsize)
         
-        # 1. PSNR
-        ax1 = axes[0]
-        ax1.plot(res_lin['q'], res_lin['psnr'], color=colors['linear'], linestyle=markers['linear'], label='Linear')
-        ax1.plot(res_vst['q'], res_vst['psnr'], color=colors['vst'], linestyle=markers['vst'], label='VST')
-        ax1.scatter(oop_lin['q'], oop_lin['psnr'], s=150, c=colors['linear'], marker='*', label='OOP Linear')
-        ax1.scatter(oop_vst['q'], oop_vst['psnr'], s=150, c=colors['vst'], marker='*', label='OOP VST')
-        ax1.set_title("PSNR vs Q")
-        ax1.set_xlabel("Q")
-        ax1.grid(True, alpha=0.3)
-        ax1.legend()
-        
-        # 2. HVS-M
-        ax2 = axes[1]
-        has_hvsm = 'psnr_hvsm' in res_lin and len(res_lin['psnr_hvsm']) > 0
-        if has_hvsm:
-            ax2.plot(res_lin['q'], res_lin['psnr_hvsm'], color=colors['linear'], linestyle=markers['linear'], label='Linear')
-            ax2.plot(res_vst['q'], res_vst['psnr_hvsm'], color=colors['vst'], linestyle=markers['vst'], label='VST')
-            ax2.scatter(oop_lin['q'], oop_lin['psnr_hvsm'], s=150, c=colors['linear'], marker='*')
-            ax2.scatter(oop_vst['q'], oop_vst['psnr_hvsm'], s=150, c=colors['vst'], marker='*')
-            ax2.set_title("HVS-M vs Q")
-        else:
-            ax2.text(0.5, 0.5, "HVS-M Not Available", ha='center')
-        ax2.set_xlabel("Q")
-        ax2.grid(True, alpha=0.3)
+        # Helper to plot on axis
+        def plot_psnr(ax):
+            ax.plot(res_lin['q'], res_lin['psnr'], color=colors['linear'], linestyle=markers['linear'], label='Linear')
+            ax.plot(res_vst['q'], res_vst['psnr'], color=colors['vst'], linestyle=markers['vst'], label='VST')
+            ax.scatter(oop_lin['q'], oop_lin['psnr'], s=150, c=colors['linear'], marker='*', label='OOP Linear')
+            ax.scatter(oop_vst['q'], oop_vst['psnr'], s=150, c=colors['vst'], marker='*', label='OOP VST')
+            ax.set_title("PSNR vs Q")
+            ax.set_xlabel("Q")
+            ax.grid(True, alpha=0.3)
+            ax.legend()
 
+        def plot_hvsm(ax):
+            has_hvsm = 'psnr_hvsm' in res_lin and len(res_lin['psnr_hvsm']) > 0
+            if has_hvsm:
+                ax.plot(res_lin['q'], res_lin['psnr_hvsm'], color=colors['linear'], linestyle=markers['linear'], label='Linear')
+                ax.plot(res_vst['q'], res_vst['psnr_hvsm'], color=colors['vst'], linestyle=markers['vst'], label='VST')
+                ax.scatter(oop_lin['q'], oop_lin['psnr_hvsm'], s=150, c=colors['linear'], marker='*', label='OOP Linear')
+                ax.scatter(oop_vst['q'], oop_vst['psnr_hvsm'], s=150, c=colors['vst'], marker='*', label='OOP VST')
+                ax.set_title("HVS-M vs Q")
+                ax.legend() # Added Legend
+            else:
+                ax.text(0.5, 0.5, "HVS-M Not Available", ha='center')
+            ax.set_xlabel("Q")
+            ax.grid(True, alpha=0.3)
+
+        def plot_mse(ax):
+            if 'mse_codec' in res_lin:
+                ax.plot(res_lin['q'], res_lin['mse_codec'], color=colors['linear'], linestyle=markers['linear'], label='Linear')
+                ax.plot(res_vst['q'], res_vst['mse_codec'], color=colors['vst'], linestyle=markers['vst'], label='VST')
+                ax.set_title("Codec MSE (Log/Lin Domain)")
+            else:
+                ax.text(0.5, 0.5, "MSE Not Available", ha='center')
+            ax.set_xlabel("Q")
+            ax.grid(True, alpha=0.3)
+            ax.legend()
+
+        # 1. PSNR
+        plot_psnr(axes[0])
+        # 2. HVS-M
+        plot_hvsm(axes[1])
         # 3. MSE Codec
-        ax3 = axes[2]
-        if 'mse_codec' in res_lin:
-            ax3.plot(res_lin['q'], res_lin['mse_codec'], color=colors['linear'], linestyle=markers['linear'], label='Linear')
-            ax3.plot(res_vst['q'], res_vst['mse_codec'], color=colors['vst'], linestyle=markers['vst'], label='VST')
-            ax3.set_title("Codec MSE (Log/Lin Domain)")
-        else:
-            ax3.text(0.5, 0.5, "MSE Not Available", ha='center')
-        ax3.set_xlabel("Q")
-        ax3.grid(True, alpha=0.3)
-        ax3.legend()
+        plot_mse(axes[2])
         
         plt.tight_layout()
         
-        self._save_plot(fig, "Curves")
+        # Save Combined (optional, but keep for consistency) or skip
+        # self._save_plot(fig, "Curves_Combined")
         
+        # Save Separate High-Res Plots
+        if self.cfg.plotting.save_plots:
+            # Create a separate figure for each to ensure simple saving without complex subplot slicing
+            # PSNR
+            f1, a1 = plt.subplots(figsize=(8, 6))
+            plot_psnr(a1)
+            self._save_plot(f1, "Plot_PSNR")
+            plt.close(f1)
+            
+            # HVS-M
+            f2, a2 = plt.subplots(figsize=(8, 6))
+            plot_hvsm(a2)
+            self._save_plot(f2, "Plot_HVSM")
+            plt.close(f2)
+            
+            # MSE
+            f3, a3 = plt.subplots(figsize=(8, 6))
+            plot_mse(a3)
+            self._save_plot(f3, "Plot_MSE")
+            plt.close(f3)
+
         if self.cfg.plotting.show_plots:
-            plt.show()
+            plt.show() # Display the combined one in notebook
         else:
             plt.close(fig)
 
@@ -111,28 +134,41 @@ class MatplotlibPlotter(PlotterInterface):
         map_lin = QualityMetrics.compute_relative_error_map(ref, img_lin)
         map_vst = QualityMetrics.compute_relative_error_map(ref, img_vst)
         
-        # Use config figsize but maybe taller/different aspect? use default or dynamic
+        # Notebook Display: Combined
         fig, axes = plt.subplots(1, 2, figsize=(14, 6))
-        
         cmap_name = self.cfg.plotting.cmap
         
-        # Plot Linear
-        im1 = axes[0].imshow(map_lin, cmap=cmap_name, vmin=0, vmax=255)
-        axes[0].set_title(f"Relative Error Map (Standard)\nQ={result.oop_points['linear'].get('q', '?')}\n(Blue: Loss, White: Accurate, Red: Excess)")
-        axes[0].axis('off')
+        def plot_map(ax, data, title, q):
+            im = ax.imshow(data, cmap=cmap_name, vmin=0, vmax=255)
+            ax.set_title(f"{title}\nQ={q}\n(Blue: Loss, White: Accurate, Red: Excess)")
+            ax.axis('off')
+            return im
+
+        im1 = plot_map(axes[0], map_lin, "Relative Error Map (Standard)", result.oop_points['linear'].get('q', '?'))
         cb1 = fig.colorbar(im1, ax=axes[0], fraction=0.046, pad=0.04)
         cb1.set_label('Relative Error Bias (128=0%)')
         
-        # Plot VST
-        im2 = axes[1].imshow(map_vst, cmap=cmap_name, vmin=0, vmax=255)
-        axes[1].set_title(f"Relative Error Map (VST)\nQ={result.oop_points['vst'].get('q', '?')}\n(Blue: Loss, White: Accurate, Red: Excess)")
-        axes[1].axis('off')
+        im2 = plot_map(axes[1], map_vst, "Relative Error Map (VST)", result.oop_points['vst'].get('q', '?'))
         cb2 = fig.colorbar(im2, ax=axes[1], fraction=0.046, pad=0.04)
         cb2.set_label('Relative Error Bias (128=0%)')
         
         plt.tight_layout()
         
-        self._save_plot(fig, "ErrorMaps")
+        # Save Separate
+        if self.cfg.plotting.save_plots:
+             # Lin
+             f1, a1 = plt.subplots(figsize=(8, 8))
+             i1 = plot_map(a1, map_lin, "Relative Error Map (Standard)", result.oop_points['linear'].get('q', '?'))
+             # c1 = f1.colorbar(i1, ax=a1, fraction=0.046, pad=0.04)
+             self._save_plot(f1, "ErrorMap_Linear")
+             plt.close(f1)
+             
+             # VST
+             f2, a2 = plt.subplots(figsize=(8, 8))
+             i2 = plot_map(a2, map_vst, "Relative Error Map (VST)", result.oop_points['vst'].get('q', '?'))
+             # c2 = f2.colorbar(i2, ax=a2, fraction=0.046, pad=0.04)
+             self._save_plot(f2, "ErrorMap_VST")
+             plt.close(f2)
         
         if self.cfg.plotting.show_plots:
             plt.show()
