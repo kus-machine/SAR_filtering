@@ -3,13 +3,10 @@ from skimage.metrics import peak_signal_noise_ratio as psnr
 from skimage.metrics import structural_similarity as ssim
 from .interfaces import MetricRegistry
 
-# Check for psnr-hvsm
-try:
-    from psnr_hvsm import psnr_hvs_hvsm
-    HAS_HVSM = True
-except ImportError:
-    print("WARNING: 'psnr-hvsm' library not found. HVS-M metrics will be disabled.")
-    HAS_HVSM = False
+from .interfaces import MetricRegistry
+from .psnr_hvsm import psnr_hvs_hvsm
+
+HAS_HVSM = True
 
 class QualityMetrics:
     """Namespace for metric calculations."""
@@ -34,29 +31,25 @@ class QualityMetrics:
         Calculates (PSNR-HVS, PSNR-HVS-M).
         Returns: (psnr_hvs, psnr_hvsm)
         """
-        if not HAS_HVSM:
-            print("WARNING: Attempted to compute HVS metrics but library is missing.")
-            return 0.0, 0.0
-            
         if data_range is None: 
             data_range = gt.max() - gt.min()
         
-        # Normalize to [0, 1] for the library
-        min_val = gt.min()
-        img1 = (gt - min_val) / data_range
-        img2 = (dist - min_val) / data_range
+        # Normalize to [0, 1] if needed, but our internal pure python impl 
+        # handles standard range if we pass raw input, it treats as float.
+        # However, metrics usually expect [0, 255] or [0, 1].
+        # Our implementation in psnr_hvsm.py assumes input scale is consistent.
+        # Let's clean up logic:
         
-        # Crop to 8x8 blocks
-        h, w = img1.shape
-        h = (h // 8) * 8
-        w = (w // 8) * 8
-        img1 = img1[:h, :w]
-        img2 = img2[:h, :w]
+        # The internal impl: psnr_hvs_hvsm(img1, img2)
+        # It calculates MSE. If images are [0,255], MSE is large, Peak=255.
+        # If images are [0,1], MSE is small, Peak=1.
+        # So we just pass raw images.
         
-        return psnr_hvs_hvsm(img1, img2)
+        return psnr_hvs_hvsm(gt, dist)
 
     # Conditionally register metrics
-    if HAS_HVSM:
+    # Always available now
+    if True:
         @staticmethod
         @MetricRegistry.register("psnr_hvs")
         def compute_psnr_hvs(gt: np.ndarray, dist: np.ndarray, data_range=None) -> float:

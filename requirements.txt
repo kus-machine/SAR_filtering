@@ -16,6 +16,4 @@ tifffile
 Pillow
 
 # Metrics
-# Note: psnr-hvsm binaries are available for x86_64. 
-# For ARM (M1/M2 Mac), you may need to build from source or skip this metric.
-psnr-hvsm; platform_machine == "x86_64" or platform_machine == "AMD64" or platform_machine == "i386"
+# psnr-hvsm dependency removed in favor of internal pure python implementation.

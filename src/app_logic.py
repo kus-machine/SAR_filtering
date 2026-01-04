@@ -118,14 +118,14 @@ class AnalysisController:
         # Construct summary dataframe for display
         df = pd.DataFrame([
             {
-                'Method': 'Standard', 
+                'Method': 'Standard space', 
                 'Q(OOP)': oop_lin.get('q', 0), 
                 'PSNR': f"{oop_lin.get('psnr', 0):.2f}", 
                 'HVS-M': f"{oop_lin.get('psnr_hvsm', 0):.2f}", 
                 'CR': f"{oop_lin.get('cr', 0):.1f}"
             },
             {
-                'Method': 'Proposed (VST)', 
+                'Method': 'VST space', 
                 'Q(OOP)': oop_vst.get('q', 0), 
                 'PSNR': f"{oop_vst.get('psnr', 0):.2f}", 
                 'HVS-M': f"{oop_vst.get('psnr_hvsm', 0):.2f}", 
