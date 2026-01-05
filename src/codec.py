@@ -4,23 +4,33 @@ import numpy as np
 import imageio.v3 as iio
 from pathlib import Path
 from typing import Tuple, Optional
+from shutil import which
 from .interfaces import BaseCodec, EncodeResult
 
 class BPGCodec(BaseCodec):
     def __init__(self, bpg_folder_path: str, temp_dir: str = 'temp'):
-        self.bpg_folder = Path(bpg_folder_path)
-        
         is_windows = os.name == 'nt'
-        enc_name = 'bpgenc.exe' if is_windows else 'bpgenc'
-        dec_name = 'bpgdec.exe' if is_windows else 'bpgdec'
         
-        self.bpg_enc = self.bpg_folder / enc_name
-        self.bpg_dec = self.bpg_folder / dec_name
+        # Construct full paths: Windows uses folder+program name, ARM uses program name only
+        if is_windows:
+            enc_name = 'bpgenc.exe'
+            dec_name = 'bpgdec.exe'
+            self.bpg_enc = Path(bpg_folder_path) / enc_name
+            self.bpg_dec = Path(bpg_folder_path) / dec_name
+        else:
+            self.bpg_enc = Path('bpgenc')
+            self.bpg_dec = Path('bpgdec')
+        
         self.temp_dir = Path(temp_dir)
-        
         self.temp_dir.mkdir(exist_ok=True)
-            
-        if not self.bpg_enc.exists():
+        
+        # Check availability: Windows checks file existence, ARM checks PATH
+        if is_windows:
+            enc_available = self.bpg_enc.exists()
+        else:
+            enc_available = which('bpgenc') is not None
+        
+        if not enc_available:
             print(f"Warning: Encoder not found at {self.bpg_enc}")
 
     def _normalize_and_save_png(self, image: np.ndarray, png_path: Path) -> Tuple[float, float]:
