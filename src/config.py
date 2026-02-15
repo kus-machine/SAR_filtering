@@ -1,6 +1,21 @@
 from dataclasses import dataclass, field
 from typing import List, Optional, Tuple, Dict, Any
 import platform
+import matplotlib.pyplot as plt
+
+# Global Plotting Configuration (Requested by User)
+plt.rcParams.update({
+    'font.size': 20,
+    'axes.titlesize': 20,
+    'axes.labelsize': 20,
+    'xtick.labelsize': 20,
+    'ytick.labelsize': 20,
+    'legend.fontsize': 20,
+    'figure.titlesize': 20,
+    'font.family': 'serif',
+    'font.serif': ['Times New Roman']
+})
+
 
 @dataclass
 class VSTConfig:

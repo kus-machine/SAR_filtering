@@ -8,6 +8,20 @@ class MatplotlibPlotter(PlotterInterface):
     def __init__(self, config: AppConfig):
         self.cfg = config
         
+        # Increase font size globally for this plotter
+        # Assuming defaults are around 10-12, we double them
+        plt.rcParams.update({
+            'font.size': 20,
+            'axes.titlesize': 20,
+            'axes.labelsize': 20,
+            'xtick.labelsize': 20,
+            'ytick.labelsize': 20,
+            'legend.fontsize': 20,
+            'figure.titlesize': 20,
+            'font.family': 'serif',
+            'font.serif': ['Times New Roman']
+        })
+        
     def _save_plot(self, fig, filename: str):
         """Helper to save plot if enabled."""
         if self.cfg.plotting.save_plots:
@@ -60,10 +74,10 @@ class MatplotlibPlotter(PlotterInterface):
                 ax.plot(res_vst['q'], res_vst['psnr_hvsm'], color=colors['vst'], linestyle=markers['vst'], label='VST')
                 ax.scatter(oop_lin['q'], oop_lin['psnr_hvsm'], s=150, c=colors['linear'], marker='*', label='OOP Linear')
                 ax.scatter(oop_vst['q'], oop_vst['psnr_hvsm'], s=150, c=colors['vst'], marker='*', label='OOP VST')
-                ax.set_title("HVS-M vs Q")
+                ax.set_title("PSNR-HVS-M vs Q")
                 ax.legend() # Added Legend
             else:
-                ax.text(0.5, 0.5, "HVS-M Not Available", ha='center')
+                ax.text(0.5, 0.5, "PSNR-HVS-M Not Available", ha='center')
             ax.set_xlabel("Q")
             ax.grid(True, alpha=0.3)
 
